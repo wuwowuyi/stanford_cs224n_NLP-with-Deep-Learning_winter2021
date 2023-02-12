@@ -18,6 +18,7 @@ def sigmoid(x):
     """
 
     ### YOUR CODE HERE (~1 Line)
+    s = 1 / (1 + np.exp(-x))
 
     ### END YOUR CODE
 
@@ -63,7 +64,14 @@ def naiveSoftmaxLossAndGradient(
 
     ### Please use the provided softmax function (imported earlier in this file)
     ### This numerically stable implementation helps you avoid issues pertaining
-    ### to integer overflow. 
+    ### to integer overflow.
+
+    y_h = softmax(np.dot(outsideVectors, centerWordVec))
+    loss = -np.log(y_h[outsideWordIdx])
+    outsideVector = outsideVectors[outsideWordIdx]
+    gradCenterVec = outsideVector - np.dot(outsideVectors.T, y_h)
+    gradOutsideVecs = np.outer(y_h, centerWordVec.T)
+    gradOutsideVecs[outsideWordIdx] -= centerWordVec.T
 
     ### END YOUR CODE
 
@@ -109,8 +117,16 @@ def negSamplingLossAndGradient(
     indices = [outsideWordIdx] + negSampleWordIndices
 
     ### YOUR CODE HERE (~10 Lines)
-
-    ### Please use your implementation of sigmoid in here.
+    U_hat = np.row_stack((outsideVectors[outsideWordIdx], -outsideVectors[negSampleWordIndices]))
+    probs = sigmoid(np.dot(U_hat, centerWordVec))
+    loss = -np.sum(np.log(probs))
+    d = np.ones((K+1, 1)) - probs.reshape(-1, 1)
+    gradCenterVec = -np.dot(U_hat.T, d)
+    d[0] = -d[0]
+    grad_U_hat = np.outer(d, centerWordVec.T)
+    gradOutsideVecs = np.zeros(outsideVectors.shape)
+    for i in range(K+1):
+        gradOutsideVecs[indices[i]] += grad_U_hat[indices[i]]
 
     ### END YOUR CODE
 
