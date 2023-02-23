@@ -73,16 +73,19 @@ class ParserModel(nn.Module):
         ### 
         ### See the PDF for hints.
 
-        self.embed_to_hidden_weight = nn.Parameter(torch.empty(hidden_size, n_features * self.embed_size))
+        self.embed_to_hidden_weight = nn.Parameter(torch.empty(n_features * self.embed_size, hidden_size))
+
+        # source code shows the first dimension should be #in_features, second #out_features.
         nn.init.xavier_uniform_(self.embed_to_hidden_weight)
-        self.embed_to_hidden_bias = nn.Parameter(torch.empty(hidden_size, 1))
+
+        self.embed_to_hidden_bias = nn.Parameter(torch.empty(hidden_size))
         nn.init.uniform_(self.embed_to_hidden_bias)
 
         self.drop_layer = nn.Dropout(p=dropout_prob)
 
-        self.hidden_to_logits_weight = nn.Parameter(torch.empty(n_classes, hidden_size))
+        self.hidden_to_logits_weight = nn.Parameter(torch.empty(hidden_size, n_classes))
         nn.init.xavier_uniform_(self.hidden_to_logits_weight)
-        self.hidden_to_logits_bias = nn.Parameter(torch.empty(n_classes, 1))
+        self.hidden_to_logits_bias = nn.Parameter(torch.empty(n_classes))
         nn.init.uniform_(self.hidden_to_logits_bias)
 
         ### END YOUR CODE
@@ -155,9 +158,9 @@ class ParserModel(nn.Module):
         ###     ReLU: https://pytorch.org/docs/stable/nn.html?highlight=relu#torch.nn.functional.relu
 
         x = self.embedding_lookup(w)  # shape=(batch_size, n_features * embed_size)
-        h = nn.ReLU()(self.embed_to_hidden_weight @ x.T + self.embed_to_hidden_bias)  # shape=(hidden_size, batch_size)
+        h = nn.ReLU()(x @ self.embed_to_hidden_weight + self.embed_to_hidden_bias)  # shape=(batch_size, hidden_size)
         h = self.drop_layer(h)
-        logits = (self.hidden_to_logits_weight @ h + self.hidden_to_logits_bias).T  # shape=(batch_size, n_classes)
+        logits = (h @ self.hidden_to_logits_weight + self.hidden_to_logits_bias)  # shape=(batch_size, n_classes)
 
         ### END YOUR CODE
         return logits
