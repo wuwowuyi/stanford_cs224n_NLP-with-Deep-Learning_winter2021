@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 CS224N 2020-2021: Homework 3
@@ -12,6 +11,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 
 class ParserModel(nn.Module):
     """ Feedforward neural network with an embedding layer and two hidden layers.
@@ -73,8 +73,17 @@ class ParserModel(nn.Module):
         ### 
         ### See the PDF for hints.
 
+        self.embed_to_hidden_weight = nn.Parameter(torch.empty(hidden_size, n_features * self.embed_size))
+        nn.init.xavier_uniform_(self.embed_to_hidden_weight)
+        self.embed_to_hidden_bias = nn.Parameter(torch.empty(hidden_size, 1))
+        nn.init.uniform_(self.embed_to_hidden_bias)
 
+        self.drop_layer = nn.Dropout(p=dropout_prob)
 
+        self.hidden_to_logits_weight = nn.Parameter(torch.empty(n_classes, hidden_size))
+        nn.init.xavier_uniform_(self.hidden_to_logits_weight)
+        self.hidden_to_logits_bias = nn.Parameter(torch.empty(n_classes, 1))
+        nn.init.uniform_(self.hidden_to_logits_bias)
 
         ### END YOUR CODE
 
@@ -107,7 +116,8 @@ class ParserModel(nn.Module):
         ###     View: https://pytorch.org/docs/stable/tensors.html#torch.Tensor.view
         ###     Flatten: https://pytorch.org/docs/stable/generated/torch.flatten.html
 
-
+        batch_size = w.shape[0]
+        x = torch.index_select(self.embeddings, 0, w.flatten()).reshape(batch_size, -1)
 
         ### END YOUR CODE
         return x
@@ -144,6 +154,10 @@ class ParserModel(nn.Module):
         ###     Matrix product: https://pytorch.org/docs/stable/torch.html#torch.matmul
         ###     ReLU: https://pytorch.org/docs/stable/nn.html?highlight=relu#torch.nn.functional.relu
 
+        x = self.embedding_lookup(w)  # shape=(batch_size, n_features * embed_size)
+        h = nn.ReLU()(self.embed_to_hidden_weight @ x.T + self.embed_to_hidden_bias)  # shape=(hidden_size, batch_size)
+        h = self.drop_layer(h)
+        logits = (self.hidden_to_logits_weight @ h + self.hidden_to_logits_bias).T  # shape=(batch_size, n_classes)
 
         ### END YOUR CODE
         return logits
