@@ -1,0 +1,16 @@
+
+hidden units 512 相比 256/200，test accuracy 从89.5提高到约90.15. 但继续提高到1024没有变化。
+
+加入 learning rate scheduler, 在epoch=10时减半，好像没有什么变化，可能略有0.2的提高，但只运行了一次，不确定。
+
+test accuracy 总是略高于 train accuracy.
+把 dropout 的probability从0.5提高到0.8，即drop 80%的output, test accuracy 也能维持在89以上。
+从0.5减到0.2, test accuracy也只有90。
+
+目前最好的test accuracy 90.36:
+lr 默认值0.0005.
+hidden units 512, p=0.5, 20 epochs (13 epoch得到最优值). epoch=10 lr 减半
+
+
+
+

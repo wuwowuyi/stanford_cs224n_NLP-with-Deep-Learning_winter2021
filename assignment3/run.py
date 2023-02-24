@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 CS224N 2020-2021: Homework 3
@@ -53,13 +52,17 @@ def train(parser, train_data, dev_data, output_path, batch_size=1024, n_epochs=1
     ###     Adam Optimizer: https://pytorch.org/docs/stable/optim.html
     ###     Cross Entropy Loss: https://pytorch.org/docs/stable/nn.html#crossentropyloss
 
+    optimizer = optim.Adam(parser.model.parameters(), lr=lr)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10], gamma=0.5, verbose=True)
 
+    loss_func = nn.CrossEntropyLoss()
 
     ### END YOUR CODE
 
     for epoch in range(n_epochs):
         print("Epoch {:} out of {:}".format(epoch + 1, n_epochs))
         dev_UAS = train_for_epoch(parser, train_data, dev_data, optimizer, loss_func, batch_size)
+        scheduler.step()
         if dev_UAS > best_dev_UAS:
             best_dev_UAS = dev_UAS
             print("New best dev UAS! Saving model.")
@@ -83,14 +86,14 @@ def train_for_epoch(parser, train_data, dev_data, optimizer, loss_func, batch_si
 
     @return dev_UAS (float): Unlabeled Attachment Score (UAS) for dev data
     """
-    parser.model.train() # Places model in "train" mode, i.e. apply dropout layer
+    parser.model.train()  # Places model in "train" mode, i.e. apply dropout layer
     n_minibatches = math.ceil(len(train_data) / batch_size)
     loss_meter = AverageMeter()
 
     with tqdm(total=(n_minibatches)) as prog:
         for i, (train_x, train_y) in enumerate(minibatches(train_data, batch_size)):
             optimizer.zero_grad()   # remove any baggage in the optimizer
-            loss = 0. # store loss for this batch here
+            loss = 0.  # store loss for this batch here
             train_x = torch.from_numpy(train_x).long()
             train_y = torch.from_numpy(train_y.nonzero()[1]).long()
 
@@ -106,17 +109,19 @@ def train_for_epoch(parser, train_data, dev_data, optimizer, loss_func, batch_si
             ### Please see the following docs for support:
             ###     Optimizer Step: https://pytorch.org/docs/stable/optim.html#optimizer-step
 
-
-
+            logits = parser.model(train_x)
+            loss = loss_func(logits, train_y)
+            loss.backward()
+            optimizer.step()
 
             ### END YOUR CODE
             prog.update(1)
             loss_meter.update(loss.item())
 
-    print ("Average Train Loss: {}".format(loss_meter.avg))
+    print("Average Train Loss: {}".format(loss_meter.avg))
 
     print("Evaluating on dev set",)
-    parser.model.eval() # Places model in "eval" mode, i.e. don't apply dropout layer
+    parser.model.eval()  # Places model in "eval" mode, i.e. don't apply dropout layer
     dev_UAS, _ = parser.parse(dev_data)
     print("- dev UAS: {:.2f}".format(dev_UAS * 100.0))
     return dev_UAS
@@ -133,7 +138,7 @@ if __name__ == "__main__":
     parser, embeddings, train_data, dev_data, test_data = load_and_preprocess_data(debug)
 
     start = time.time()
-    model = ParserModel(embeddings)
+    model = ParserModel(embeddings, dropout_prob=0.5)
     parser.model = model
     print("took {:.2f} seconds\n".format(time.time() - start))
 
@@ -146,7 +151,7 @@ if __name__ == "__main__":
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    train(parser, train_data, dev_data, output_path, batch_size=1024, n_epochs=10, lr=0.0005)
+    train(parser, train_data, dev_data, output_path, batch_size=1024, n_epochs=20, lr=0.001)
 
     if not debug:
         print(80 * "=")
