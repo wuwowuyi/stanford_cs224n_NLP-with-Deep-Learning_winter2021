@@ -76,9 +76,15 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/nn.html#torch.nn.Linear
         ###     Dropout Layer:
         ###         https://pytorch.org/docs/stable/nn.html#torch.nn.Dropout
-
-
-
+        h = hidden_size
+        self.encoder = nn.LSTM(input_size=embed_size, hidden_size=h, bidirectional=True)
+        self.decoder = nn.LSTMCell(input_size=embed_size + h, hidden_size=h)
+        self.h_projection = nn.Linear(in_features=2*h, out_features=h, bias=False)
+        self.c_projection = nn.Linear(in_features=2*h, out_features=h, bias=False)
+        self.att_projection = nn.Bilinear(in1_features=h, in2_features=2*h, out_features=1, bias=False)
+        self.combined_output_projection = nn.Linear(in_features=3*h, out_features=h, bias=False)
+        self.target_vocab_projection = nn.Linear(in_features=h, out_features=len(vocab.tgt), bias=False)
+        self.dropout = nn.Dropout(p=dropout_rate)
 
         ### END YOUR CODE
 
@@ -169,9 +175,17 @@ class NMT(nn.Module):
         ###     Tensor Permute:
         ###         https://pytorch.org/docs/stable/tensors.html#torch.Tensor.permute
 
+        X = self.model_embeddings.source(source_padded)  # shape (seq, batch, embedding)
+        X = pack_padded_sequence(X, source_lengths)
 
+        # enc_hiddens shape is (seq, batch, 2 * hidden_size)
+        # hiddens and cells are in same shape (2, batch, hidden_size)
+        enc_hiddens, (hiddens, cells) = self.encoder(X)
+        enc_hiddens, _ = pad_packed_sequence(enc_hiddens, batch_first=True)
 
-
+        final_hiddens = torch.cat((hiddens[0], hiddens[1]), 1)
+        final_cells = torch.cat((cells[0], cells[1]), 1)
+        dec_init_state = (self.h_projection(final_hiddens), self.c_projection(final_cells))
 
         ### END YOUR CODE
 
