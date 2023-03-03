@@ -35,13 +35,11 @@ def pad_sents(sents, pad_token):
 
     ### YOUR CODE HERE (~6 Lines)
     max_length = 0
-    sents_padded = []
     for sent in sents:
         max_length = max(max_length, len(sent))
     for sent in sents:
-        sent_padded = sent[:]
-        sent_padded.extend([pad_token] * (max_length - len(sent)))
-        sents_padded.append(sent_padded)
+        sent.extend([pad_token] * (max_length - len(sent)))
+        sents_padded.append(sent)
 
     ### END YOUR CODE
 
