@@ -13,7 +13,7 @@ def set_seed(seed):
 def top_k_logits(logits, k):
     v, ix = torch.topk(logits, k)
     out = logits.clone()
-    out[out < v[:, [-1]]] = -float('Inf')
+    out[out < v[:, [-1]]] = -float('Inf')  # v[:, [-1]] gets last element along each row
     return out
 
 @torch.no_grad()
@@ -30,7 +30,7 @@ def sample(model, x, steps, temperature=1.0, sample=False, top_k=None):
         x_cond = x if x.size(1) <= block_size else x[:, -block_size:] # crop context if needed
         logits, _ = model(x_cond)
         # pluck the logits at the final step and scale by temperature
-        logits = logits[:, -1, :] / temperature
+        logits = logits[:, -1, :] / temperature  # -1 is the prediction of next token
         # optionally crop probabilities to only the top k options
         if top_k is not None:
             logits = top_k_logits(logits, top_k)

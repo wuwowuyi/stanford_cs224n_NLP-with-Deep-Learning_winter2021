@@ -59,7 +59,7 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
 
     def forward(self, x, layer_past=None):
-        B, T, C = x.size()
+        B, T, C = x.size()  # B = #batch, T = len(sequence), block_size in this case, C = #feature_dim.
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         k = self.key(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -106,7 +106,11 @@ class GPT(nn.Module):
 
         # input embedding stem
         self.tok_emb = nn.Embedding(config.vocab_size, config.n_embd)
+
+        # add one dimension to pos_emb since data's first dimension is batch.
+        # position embedding is a #n_embed dimensional vector
         self.pos_emb = nn.Parameter(torch.zeros(1, config.block_size, config.n_embd))
+
         self.drop = nn.Dropout(config.embd_pdrop)
         # transformer
         self.blocks = nn.Sequential(*[Block(config) for _ in range(config.n_layer)])
@@ -178,7 +182,7 @@ class GPT(nn.Module):
         return optimizer
 
     def forward(self, idx, targets=None):
-        b, t = idx.size()
+        b, t = idx.size()  # t = block_size + 1
         assert t <= self.block_size, "Cannot forward, model block size is exhausted."
 
         # forward the GPT model
