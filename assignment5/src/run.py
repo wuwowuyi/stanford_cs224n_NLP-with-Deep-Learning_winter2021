@@ -16,20 +16,27 @@ argp = argparse.ArgumentParser()
 argp.add_argument('function',
     help="Whether to pretrain, finetune or evaluate a model",
     choices=["pretrain", "finetune", "evaluate"])
+
 argp.add_argument('variant',
     help="Which variant of the model to run ('vanilla' or 'synthesizer')",
     choices=["vanilla", "synthesizer"])
+
 argp.add_argument('pretrain_corpus_path',
     help="Path of the corpus to pretrain on", default=None)
+
 argp.add_argument('--reading_params_path',
     help="If specified, path of the model to load before finetuning/evaluation",
     default=None)
+
 argp.add_argument('--writing_params_path',
     help="Path to save the model after pretraining/finetuning", default=None)
+
 argp.add_argument('--finetune_corpus_path',
     help="Path of the corpus to finetune on", default=None)
+
 argp.add_argument('--eval_corpus_path',
     help="Path of the corpus to evaluate on", default=None)
+
 argp.add_argument('--outputs_path', default=None)
 args = argp.parse_args()
 
@@ -55,7 +62,8 @@ Don't change above here; write your code below
 """
 
 if args.variant == 'vanilla':
-    pass # TODO [part c]: Make some model here
+    gpt = model.GPT(mconf)
+
 elif args.variant == 'synthesizer':
     pass # TODO [part g]: Make some other model here
 
@@ -112,12 +120,23 @@ elif args.function == 'finetune':
     #         warmup_tokens=512*20
     #         final_tokens=200*len(pretrain_dataset)*block_size
     #         num_workers=4
-    raise NotImplementedError
+
+    finetune_text = open(args.finetune_corpus_path, 'r').read()
+    finetune_dataset = dataset.NameDataset(pretrain_dataset, finetune_text)
+    tconfig = trainer.TrainerConfig(max_epochs=75, batch_size=256, learning_rate=6e-4,
+                                    lr_decay=True, warmup_tokens=512*20,
+                                    final_tokens=200 * len(pretrain_dataset) * block_size)
+    if args.reading_params_path:
+        gpt.load_state_dict(torch.load(args.reading_params_path))
+    trainer = trainer.Trainer(gpt, finetune_dataset, None, tconfig)
+    trainer.train()
+    torch.save(gpt.state_dict(), args.writing_params_path)
+
 elif args.function == 'evaluate':
     assert args.outputs_path is not None
     assert args.reading_params_path is not None
     assert args.eval_corpus_path is not None
-    model.load_state_dict(torch.load(args.reading_params_path))
+    gpt.load_state_dict(torch.load(args.reading_params_path))
     correct = 0
     total = 0
     with open(args.outputs_path, 'w') as fout:
@@ -126,7 +145,7 @@ elif args.function == 'evaluate':
             x = line.split('\t')[0]
             x = x + '⁇'
             x = torch.tensor([pretrain_dataset.stoi[s] for s in x], dtype=torch.long)[None,...].to(device)
-            pred = utils.sample(model, x, 32, sample=False)[0]
+            pred = utils.sample(gpt, x, 32, sample=False)[0]
             completion = ''.join([pretrain_dataset.itos[int(i)] for i in pred])
             pred = completion.split('⁇')[1]
             predictions.append(pred)
