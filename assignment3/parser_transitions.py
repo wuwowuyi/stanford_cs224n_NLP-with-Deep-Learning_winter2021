@@ -34,7 +34,7 @@ class PartialParse(object):
         ###       reference the sentence object.  That is, remember to NOT modify the sentence object.
 
         self.stack = ['ROOT']
-        self.buffer = sentence[:]  # reverse sentence would be more efficient
+        self.buffer = sentence[::-1]  # reverse sentence would be more efficient
         self.dependencies = []
 
         ### END YOUR CODE
@@ -49,11 +49,11 @@ class PartialParse(object):
         """
         ### YOUR CODE HERE (~7-12 Lines)
         if transition == "S":  # shift
-            self.stack.append(self.buffer.pop(0))
-        elif transition == "LA":
+            self.stack.append(self.buffer.pop())
+        elif transition == "LA":  # left-arc
             dependent = self.stack.pop(-2)
             self.dependencies.append((self.stack[-1], dependent))
-        elif transition == "RA":
+        elif transition == "RA":  # right-arc
             dependent = self.stack.pop()
             self.dependencies.append((self.stack[-1], dependent))
         else:

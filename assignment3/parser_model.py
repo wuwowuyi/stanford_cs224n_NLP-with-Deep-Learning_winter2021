@@ -81,6 +81,7 @@ class ParserModel(nn.Module):
         self.embed_to_hidden_bias = nn.Parameter(torch.empty(hidden_size))
         nn.init.uniform_(self.embed_to_hidden_bias)
 
+        self.relu = nn.ReLU()
         self.drop_layer = nn.Dropout(p=dropout_prob)
 
         self.hidden_to_logits_weight = nn.Parameter(torch.empty(hidden_size, n_classes))
@@ -158,9 +159,9 @@ class ParserModel(nn.Module):
         ###     ReLU: https://pytorch.org/docs/stable/nn.html?highlight=relu#torch.nn.functional.relu
 
         x = self.embedding_lookup(w)  # shape=(batch_size, n_features * embed_size)
-        h = nn.ReLU()(x @ self.embed_to_hidden_weight + self.embed_to_hidden_bias)  # shape=(batch_size, hidden_size)
+        h = self.relu(x @ self.embed_to_hidden_weight + self.embed_to_hidden_bias)  # shape=(batch_size, hidden_size)
         h = self.drop_layer(h)
-        logits = (h @ self.hidden_to_logits_weight + self.hidden_to_logits_bias)  # shape=(batch_size, n_classes)
+        logits = h @ self.hidden_to_logits_weight + self.hidden_to_logits_bias  # shape=(batch_size, n_classes)
 
         ### END YOUR CODE
         return logits
