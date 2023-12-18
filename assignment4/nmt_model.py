@@ -176,14 +176,15 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/tensors.html#torch.Tensor.permute
 
         X = self.model_embeddings.source(source_padded)  # shape (seq, batch, embedding)
-        X = pack_padded_sequence(X, torch.tensor(source_lengths))
+        X = pack_padded_sequence(X, torch.tensor(source_lengths))  # for computation efficiency. see https://stackoverflow.com/questions/51030782/why-do-we-pack-the-sequences-in-pytorch
 
-        # enc_hiddens shape is (seq, batch, 2 * hidden_size)
-        # hiddens and cells are in same shape (2, batch, hidden_size)
+        # enc_hiddens shape is (seq, batch, 2 * hidden_size), containing hidden states of all steps from last layer
+        # hiddens and cells are in same shape (2, batch, hidden_size).
+        # hiddens/cells are the last step hidden/cell states from all layers.
         enc_hiddens, (hiddens, cells) = self.encoder(X)
-        enc_hiddens, _ = pad_packed_sequence(enc_hiddens, batch_first=True)
+        enc_hiddens, _ = pad_packed_sequence(enc_hiddens, batch_first=True)  # (batch, seq, 2 * hidden_size)
 
-        final_hiddens = torch.cat((hiddens[0], hiddens[1]), 1)
+        final_hiddens = torch.cat((hiddens[0], hiddens[1]), 1)  # shape=(batch, 2*h)
         final_cells = torch.cat((cells[0], cells[1]), 1)
         dec_init_state = (self.h_projection(final_hiddens), self.c_projection(final_cells))
 
@@ -257,10 +258,10 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/torch.html#torch.stack
 
         enc_hiddens_proj = self.att_projection(enc_hiddens)  # shape (batch, seq, h)
-        Y = self.model_embeddings.source(target_padded)  # shape (seq, batch, embedding)
+        Y = self.model_embeddings.target(target_padded)  # shape (seq, batch, embedding)
         for Y_t in torch.split(Y, 1):
-            Y_t = torch.squeeze(Y_t, 0)
-            Ybar_t = torch.cat((Y_t, o_prev))
+            Y_t = torch.squeeze(Y_t, 0)  # shape (batch, embedding)
+            Ybar_t = torch.cat((Y_t, o_prev), dim=1)  # shape (batch, embedding + h)
 
             # step() returns dec_state for next step, o_t for next input, e_t simply for test.
             dec_state, o_t, e_t = self.step(Ybar_t, dec_state, enc_hiddens, enc_hiddens_proj, enc_masks)

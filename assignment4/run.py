@@ -122,7 +122,7 @@ def train(args: Dict):
     dev_data_tgt = read_corpus(args['--dev-tgt'], source='tgt', vocab_size=2000)
 
     train_data = list(zip(train_data_src, train_data_tgt))
-    dev_data = list(zip(dev_data_src, dev_data_tgt))
+    dev_data = list(zip(dev_data_src, dev_data_tgt))  # for validation
 
     train_batch_size = int(args['--batch-size'])
     clip_grad = float(args['--clip-grad'])
@@ -151,7 +151,7 @@ def train(args: Dict):
         for p in model.parameters():
             p.data.uniform_(-uniform_init, uniform_init)
 
-    vocab_mask = torch.ones(len(vocab.tgt))
+    vocab_mask = torch.ones(len(vocab.tgt))  # for what?
     vocab_mask[vocab.tgt['<pad>']] = 0
 
     device = torch.device("cuda:0" if args['--cuda'] else "cpu")
@@ -190,8 +190,8 @@ def train(args: Dict):
             optimizer.step()
 
             batch_losses_val = batch_loss.item()
-            report_loss += batch_losses_val
-            cum_loss += batch_losses_val
+            report_loss += batch_losses_val  # accumulate for every log interval, default to 10 iters
+            cum_loss += batch_losses_val  # accumulate for every validation interval, default to 2000 iters
 
             tgt_words_num_to_predict = sum(len(s[1:]) for s in tgt_sents)  # omitting leading `<s>`
             report_tgt_words += tgt_words_num_to_predict

@@ -55,7 +55,7 @@ def read_corpus(file_path, source, vocab_size=2500):
         vocabulary when reading and tokenizing
     """
     data = []
-    sp = spm.SentencePieceProcessor()
+    sp = spm.SentencePieceProcessor()  # tokenizer
     sp.load('{}.model'.format(source))
 
     with open(file_path, 'r', encoding='utf8') as f:
@@ -95,14 +95,14 @@ def batch_iter(data, batch_size, shuffle=False):
     batch_num = math.ceil(len(data) / batch_size)
     index_array = list(range(len(data)))
 
-    if shuffle:
+    if shuffle:  # items within a batch are fixed.
         np.random.shuffle(index_array)
 
     for i in range(batch_num):
         indices = index_array[i * batch_size: (i + 1) * batch_size]
         examples = [data[idx] for idx in indices]
 
-        examples = sorted(examples, key=lambda e: len(e[0]), reverse=True)
+        examples = sorted(examples, key=lambda e: len(e[0]), reverse=True)  # order for pack_padded_sequence()
         src_sents = [e[0] for e in examples]
         tgt_sents = [e[1] for e in examples]
 
