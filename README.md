@@ -6,7 +6,7 @@ Assignment 2: word2vec
 
 Assignment 3: Dependency parsing
 
-Assignment 4: Neural Machine Translation
+Assignment 4: Neural Machine Translation (sequence to sequence with attention)
 
 Assignment 5: Self Attention, Transformers, and Pretraining
 
