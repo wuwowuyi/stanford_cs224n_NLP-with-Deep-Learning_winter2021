@@ -68,7 +68,7 @@ class CausalSelfAttention(nn.Module):
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        att = att.masked_fill(self.mask[:,:,:T,:T] == 0, float('-inf'))
+        att = att.masked_fill(self.mask[:,:,:T,:T] == 0, float('-inf'))  # before softmax so no prob on future
         att = F.softmax(att, dim=-1)
         att = self.attn_drop(att)
         y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
@@ -116,7 +116,7 @@ class GPT(nn.Module):
         self.blocks = nn.Sequential(*[Block(config) for _ in range(config.n_layer)])
         # decoder head
         self.ln_f = nn.LayerNorm(config.n_embd)
-        self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)  # why head has no bias?
 
         self.block_size = config.block_size
         self.apply(self._init_weights)
@@ -182,7 +182,7 @@ class GPT(nn.Module):
         return optimizer
 
     def forward(self, idx, targets=None):
-        b, t = idx.size()  # t = block_size + 1
+        b, t = idx.size()  # t can be smaller than block size
         assert t <= self.block_size, "Cannot forward, model block size is exhausted."
 
         # forward the GPT model
