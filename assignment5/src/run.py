@@ -5,6 +5,9 @@ from tqdm import tqdm
 from torch.nn import functional as F
 import random
 import argparse
+
+from assignment5.src import attention
+
 random.seed(0)
 
 import dataset
@@ -49,7 +52,7 @@ device = torch.cuda.current_device() if torch.cuda.is_available() else 'cpu'
 # (that is, the same mapping from character to integer, and we build the 
 # vocab from the pretraining corpus.)
 block_size = 128
-text = open(args.pretrain_corpus_path).read()
+text = open(args.pretrain_corpus_path).read()  # assignment always uses wiki.txt as pretrain corpus
 pretrain_dataset = dataset.CharCorruptionDataset(text, block_size)
 
 # We don't suggest you change these hyperparameters, as they're known to work.
@@ -65,7 +68,12 @@ if args.variant == 'vanilla':
     gpt = model.GPT(mconf)
 
 elif args.variant == 'synthesizer':
-    pass # TODO [part g]: Make some other model here
+    # TODO [part g]: Make some other model here
+    gpt = model.GPT(mconf)
+    block = model.Block(mconf)
+    block.attn = attention.SynthesizerAttention(mconf)
+    gpt.blocks = nn.Sequential(*[block for _ in range(mconf.n_layer)])
+
 
 # From here on, your code should be identical independent of which
 # variant (vanilla or synthesizer) has been chosen.
@@ -88,7 +96,14 @@ if args.function == 'pretrain':
     #     warmup_tokens=512*20
     #     final_tokens=200*len(pretrain_dataset)*block_size
     #     num_workers=4
-    raise NotImplementedError
+    tconfig = trainer.TrainerConfig(max_epochs=650, batch_size=128, learning_rate=6e-3,
+                                    lr_decay=True, warmup_tokens=512 * 20,
+                                    final_tokens=200 * len(pretrain_dataset) * block_size,
+                                    num_workers=4)
+    trainer = trainer.Trainer(gpt, pretrain_dataset, None, tconfig)
+    trainer.train()
+    torch.save(gpt.state_dict(), args.writing_params_path)
+
 elif args.function == 'finetune':
     assert args.writing_params_path is not None
     assert args.finetune_corpus_path is not None
@@ -121,13 +136,21 @@ elif args.function == 'finetune':
     #         final_tokens=200*len(pretrain_dataset)*block_size
     #         num_workers=4
 
-    finetune_text = open(args.finetune_corpus_path, 'r').read()
+    with open(args.finetune_corpus_path, 'r') as f:
+        finetune_text = f.read()
     finetune_dataset = dataset.NameDataset(pretrain_dataset, finetune_text)
-    tconfig = trainer.TrainerConfig(max_epochs=75, batch_size=256, learning_rate=6e-4,
-                                    lr_decay=True, warmup_tokens=512*20,
-                                    final_tokens=200 * len(pretrain_dataset) * block_size)
-    if args.reading_params_path:
+
+    if args.reading_params_path:  # finetune with a pretrained model
         gpt.load_state_dict(torch.load(args.reading_params_path))
+        tconfig = trainer.TrainerConfig(max_epochs=10, batch_size=256, learning_rate=6e-4,
+                                        lr_decay=True, warmup_tokens=512 * 20,
+                                        final_tokens=200 * len(pretrain_dataset) * block_size,
+                                        num_workers=4)
+    else:  # finetune without a pretained model
+        tconfig = trainer.TrainerConfig(max_epochs=75, batch_size=256, learning_rate=6e-4,
+                                        lr_decay=True, warmup_tokens=512 * 20,
+                                        final_tokens=200 * len(pretrain_dataset) * block_size,
+                                        num_workers=4)
     trainer = trainer.Trainer(gpt, finetune_dataset, None, tconfig)
     trainer.train()
     torch.save(gpt.state_dict(), args.writing_params_path)

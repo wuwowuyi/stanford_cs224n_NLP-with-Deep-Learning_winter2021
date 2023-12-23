@@ -146,8 +146,8 @@ class CharCorruptionDataset(Dataset):
         self.MASK_CHAR = u"\u2047" # the doublequestionmark character, for mask
         self.PAD_CHAR = u"\u25A1" # the empty square character, for pad
 
-        chars = list(sorted(list(set(data))))
-        assert self.MASK_CHAR not in chars 
+        chars = sorted(list(set(data)))
+        assert self.MASK_CHAR not in chars
         assert self.PAD_CHAR not in chars
         chars.insert(0, self.MASK_CHAR)
         chars.insert(0, self.PAD_CHAR)
@@ -160,15 +160,28 @@ class CharCorruptionDataset(Dataset):
 
         self.block_size = block_size
         self.vocab_size = vocab_size
-        self.data = data.split('\n')
+        self.data = data.split('\n')  # each data point is a line in data.
 
     def __len__(self):
         # returns the length of the dataset
         return len(self.data)
 
     def __getitem__(self, idx):
-        # TODO [part e]: see spec above
-        raise NotImplementedError
+        # [part e]: see spec above
+        x = self.data[idx]
+        t_len = random.randint(4, int(self.block_size*7/8) + 1)
+        x = x[:t_len]  # truncate. x could be shorter than t_len
+        mask_len = max(1, random.randint(len(x)//5, len(x)//2 - len(x)//5 + 1))
+        mask_start = random.randint(1, len(x) - mask_len)  # prefix and suffix have at least 1 chars
+        prefix, masked_content, suffix = x[:mask_start], x[mask_start: mask_start + mask_len], x[mask_start + mask_len:]
+        x = prefix + self.MASK_CHAR + suffix + self.MASK_CHAR + masked_content + self.MASK_CHAR
+        x += self.PAD_CHAR * (self.block_size - len(x))  # example's size is 127, ie., block_size - 1
+        y = x[1:]
+        x = x[:-1]
+        x = torch.tensor([self.stoi[c] for c in x], dtype=torch.long)
+        y = torch.tensor([self.stoi[c] for c in y], dtype=torch.long)
+        return x, y
+
 
 """
 Code under here is strictly for your debugging purposes; feel free to modify
