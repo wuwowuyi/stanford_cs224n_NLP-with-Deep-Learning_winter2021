@@ -6,7 +6,7 @@ from torch.nn import functional as F
 import random
 import argparse
 
-from assignment5.src import attention
+import attention
 
 random.seed(0)
 
@@ -160,6 +160,8 @@ elif args.function == 'evaluate':
     assert args.reading_params_path is not None
     assert args.eval_corpus_path is not None
     gpt.load_state_dict(torch.load(args.reading_params_path))
+    gpt.to(device)
+
     correct = 0
     total = 0
     with open(args.outputs_path, 'w') as fout:
