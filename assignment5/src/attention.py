@@ -90,14 +90,13 @@ class SynthesizerAttention(nn.Module):
         #   - Consider especially the parameters self.w1, self.w2 and self.b2.
         #       How do these map to the matrices in the handout?
         B, T, C = x.size()
-
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q = nn.ReLU(self.w1(x))
+        q = nn.ReLU()(self.w1(x))
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
         v = self.value(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
 
         # (B, nh, T, hs) x (hs, T) -> (B, nh, T, T)
-        att = q @ self.w2 + self.b2
+        att = q @ self.w2[:, :T] + self.b2[:T]  # T can be less than block_size
         att = att.masked_fill(self.mask[:, :, :T, :T] == 0, float('-inf'))
         att = F.softmax(att, dim=-1)
         att = self.attn_drop(att)
