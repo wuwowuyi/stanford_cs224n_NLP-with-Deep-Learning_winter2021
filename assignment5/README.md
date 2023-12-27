@@ -1,6 +1,13 @@
 
 # Pretrained Transformer models and knowledge access
 
+![minGPT model](/assignment5/minGPT.png)
+
+![minGPT attention moduel](/assignment5/attention.png)
+
+![minGPT design pattern](/assignment5/minGPT_design.png)
+
+
 For vanilla GPT, pretrained and then finetuned model parameters is vanilla.finetune.params, evaluation result:
 
 `python src/run.py evaluate vanilla wiki.txt  --reading_params_path vanilla.finetune.params \
