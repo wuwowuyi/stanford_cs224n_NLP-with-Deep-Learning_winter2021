@@ -127,9 +127,7 @@ def negSamplingLossAndGradient(
     gradCenterVec = t[0] - np.sum(t[1:], axis=0)  # shape=(d,)
 
     gradOutsideVecs = np.zeros_like(outsideVectors)
-    t = d * centerWordVec
-    for i, index in enumerate(indices):
-        gradOutsideVecs[index] += t[i]
+    np.add.at(gradOutsideVecs, indices, d * centerWordVec)
 
     ### END YOUR CODE
 
