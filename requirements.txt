@@ -1,0 +1,8 @@
+numpy
+torch
+sentencepiece
+sacrebleu
+tqdm
+docopt
+scipy
+nltk
