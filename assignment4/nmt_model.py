@@ -116,15 +116,22 @@ class NMT(nn.Module):
 
         enc_hiddens, dec_init_state = self.encode(source_padded, source_lengths)
         enc_masks = self.generate_sent_masks(enc_hiddens, source_lengths)
-        combined_outputs = self.decode(enc_hiddens, enc_masks, dec_init_state, target_padded)
-        P = F.log_softmax(self.target_vocab_projection(combined_outputs), dim=-1)
+        combined_outputs = self.decode(enc_hiddens, enc_masks, dec_init_state, target_padded)  #shape=(tgt_len-1, b, h)
+        pred = self.target_vocab_projection(combined_outputs)  #shape=(tgt_len-1, b, |V|)
 
-        # Zero out, probabilities for which we have nothing in the target text
-        target_masks = (target_padded != self.vocab.tgt['<pad>']).float()
-        
-        # Compute log probability of generating true target words
-        target_gold_words_log_prob = torch.gather(P, index=target_padded[1:].unsqueeze(-1), dim=-1).squeeze(-1) * target_masks[1:]
-        scores = target_gold_words_log_prob.sum(dim=0)
+        # P = F.log_softmax(pred, dim=-1)
+        # # Zero out, probabilities for which we have nothing in the target text
+        # target_masks = (target_padded != self.vocab.tgt['<pad>']).float()
+        #
+        # # Compute log probability of generating true target words
+        # target_gold_words_log_prob = torch.gather(P, index=target_padded[1:].unsqueeze(-1), dim=-1).squeeze(-1) * target_masks[1:]
+        # scores = target_gold_words_log_prob.sum(dim=0)
+
+        t, b, vocab_size = pred.shape
+        target = target_padded[1:]
+        loss = F.cross_entropy(pred.reshape(-1, vocab_size), target.flatten(), reduction='none').reshape(t, b)  # shape=(tgt_len-1, b)
+        loss.masked_fill_(target == self.vocab.tgt['<pad>'], 0)
+        scores = -loss.sum(dim=0)
         return scores
 
 
@@ -176,6 +183,7 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/tensors.html#torch.Tensor.permute
 
         X = self.model_embeddings.source(source_padded)  # shape (seq, batch, embedding)
+        # X becomes a PackedSequnce object
         X = pack_padded_sequence(X, torch.tensor(source_lengths))  # for computation efficiency. see https://stackoverflow.com/questions/51030782/why-do-we-pack-the-sequences-in-pytorch
 
         # enc_hiddens shape is (seq, batch, 2 * hidden_size), containing hidden states of all steps from last layer
@@ -184,9 +192,10 @@ class NMT(nn.Module):
         enc_hiddens, (hiddens, cells) = self.encoder(X)
         enc_hiddens, _ = pad_packed_sequence(enc_hiddens, batch_first=True)  # (batch, seq, 2 * hidden_size)
 
-        final_hiddens = torch.cat((hiddens[0], hiddens[1]), 1)  # shape=(batch, 2*h)
-        final_cells = torch.cat((cells[0], cells[1]), 1)
-        dec_init_state = (self.h_projection(final_hiddens), self.c_projection(final_cells))
+        batch = hiddens.shape[1]
+        hiddens = hiddens.transpose(0, 1).reshape(batch, 2 * self.hidden_size)  # shape=(batch, 2*h)
+        cells = cells.transpose(0, 1).reshape(batch, 2 * self.hidden_size)
+        dec_init_state = (self.h_projection(hiddens), self.c_projection(cells))  # (b, h), (b, h)
 
         ### END YOUR CODE
 
@@ -258,17 +267,17 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/torch.html#torch.stack
 
         enc_hiddens_proj = self.att_projection(enc_hiddens)  # shape (batch, seq, h)
-        Y = self.model_embeddings.target(target_padded)  # shape (seq, batch, embedding)
-        for Y_t in torch.split(Y, 1):
-            Y_t = torch.squeeze(Y_t, 0)  # shape (batch, embedding)
+        Y = self.model_embeddings.target(target_padded)  # shape (tgt_len-1, batch, embedding)
+        for Y_t in Y:
             Ybar_t = torch.cat((Y_t, o_prev), dim=1)  # shape (batch, embedding + h)
 
             # step() returns dec_state for next step, o_t for next input, e_t simply for test.
+            # o_t.shape=(b, h)
             dec_state, o_t, e_t = self.step(Ybar_t, dec_state, enc_hiddens, enc_hiddens_proj, enc_masks)
             combined_outputs.append(o_t)
             o_prev = o_t
 
-        combined_outputs = torch.stack(combined_outputs)
+        combined_outputs = torch.stack(combined_outputs)  # shape=(tgt_len-1, b, h)
         ### END YOUR CODE
 
         return combined_outputs
@@ -327,19 +336,18 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/torch.html#torch.squeeze
 
         dec_state = self.decoder(Ybar_t, dec_state)
-        dec_hidden, dec_cell = dec_state
+        dec_hidden, dec_cell = dec_state  # (b, h), (b, h)
 
-        # unsqueeze dec_hidden's shape from (batch, h) to (batch, 1, h)
-        # permute enc_hiddens_proj's shape from (batch, seq, h) to (batch, h, seq)
-        # e_t's shape is (batch, 1, seq)
-        e_t = torch.bmm(torch.unsqueeze(dec_hidden, 1), torch.permute(enc_hiddens_proj, (0, 2, 1)))
+        # dec_hidden attends to every step of enc_hiddens_proj
+        # enc_hiddens_proj.shape=(b, seq, h)
+        e_t = torch.unsqueeze(dec_hidden, 1) @ enc_hiddens_proj.transpose(1, 2)
         e_t = torch.squeeze(e_t, 1)  # shape is (batch, seq)
 
         ### END YOUR CODE
 
         # Set e_t to -inf where enc_masks has 1
         if enc_masks is not None:
-            e_t.data.masked_fill_(enc_masks.bool(), -float('inf'))
+            e_t.masked_fill_(enc_masks.bool(), -float('inf'))
 
         ### YOUR CODE HERE (~6 Lines)
         ### TODO:
@@ -370,12 +378,10 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/torch.html#torch.tanh
 
         # shape is (batch, seq) attention weight of each word in sentence
-        alpha_t = nn.functional.softmax(e_t, 1)
+        alpha_t = nn.functional.softmax(e_t, 1)  # shape=(b, seq)
 
-        # permute enc_hiddens's shape from (b, seq, h*2) to (b, h*2, seq)
-        # unsqueeze alpha_t's shape from (b, seq) to (b, seq, 1)
-        # a_t's shape is (b, h*2, 1)
-        a_t = torch.bmm(torch.permute(enc_hiddens, (0, 2, 1)), torch.unsqueeze(alpha_t, 2))
+        # enc_hiddens.shape=(b, seq, 2h)
+        a_t = enc_hiddens.transpose(1, 2) @ torch.unsqueeze(alpha_t, 2)  # shape=(b, 2h, 1)
         a_t = torch.squeeze(a_t, 2)  # shape is (b, h*2)
         U_t = torch.cat((a_t, dec_hidden), 1)  # shape is (b, h*3)
         V_t = self.combined_output_projection(U_t)  # shape is (b, h)
