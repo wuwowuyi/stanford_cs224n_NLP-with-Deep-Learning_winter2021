@@ -79,6 +79,11 @@ class NMT(nn.Module):
         h = hidden_size
         self.encoder = nn.LSTM(input_size=embed_size, hidden_size=h, bidirectional=True)
         self.decoder = nn.LSTMCell(input_size=embed_size + h, hidden_size=h)
+
+        self.enc_hidden_norm = nn.LayerNorm(2 * h)  # normalize enc_hiddens
+        self.final_hidden_norm = nn.LayerNorm(2 * h)
+        self.cell_norm = nn.LayerNorm(2 * h)
+
         self.h_projection = nn.Linear(in_features=2*h, out_features=h, bias=False)
         self.c_projection = nn.Linear(in_features=2*h, out_features=h, bias=False)
         self.att_projection = nn.Linear(in_features=2*h, out_features=h, bias=False)
@@ -191,10 +196,13 @@ class NMT(nn.Module):
         # hiddens/cells are the last step hidden/cell states from all layers.
         enc_hiddens, (hiddens, cells) = self.encoder(X)
         enc_hiddens, _ = pad_packed_sequence(enc_hiddens, batch_first=True)  # (batch, seq, 2 * hidden_size)
+        enc_hiddens = self.enc_hidden_norm(enc_hiddens)
 
         batch = hiddens.shape[1]
         hiddens = hiddens.transpose(0, 1).reshape(batch, 2 * self.hidden_size)  # shape=(batch, 2*h)
         cells = cells.transpose(0, 1).reshape(batch, 2 * self.hidden_size)
+        hiddens = self.final_hidden_norm(hiddens)
+        cells = self.cell_norm(cells)
         dec_init_state = (self.h_projection(hiddens), self.c_projection(cells))  # (b, h), (b, h)
 
         ### END YOUR CODE
